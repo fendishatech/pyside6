@@ -2,9 +2,18 @@ import hashlib
 from db_helper import Database
 from typing import List, Dict, Union
 
+class PasswordHasher:
+    def __init__(self, salt: bytes) -> None:
+        self.salt = salt
+
+    def hash_password(self, password: str) -> str:
+        hashed_password = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), self.salt, 100000)
+        return hashed_password.hex()
+
 class UserRepository:
     def __init__(self, db: Database) -> None:
         self.db = db
+        self.password_hasher = PasswordHasher
         self.create_table()
 
     def create_table(self) -> None:
@@ -22,9 +31,16 @@ class UserRepository:
             return None
 
     def register(self, username: str, password: str) -> None:
-        hashed_password = self._hash_password(password)
+        hashed_password = self.password_hasher.hash_password(password)
         sql = "INSERT INTO users (username, password) VALUES (?, ?)"
         params = (username, hashed_password)
+        self.db.execute(sql, params)
+        self.db.commit()
+
+    def update_user_password(self, username: str, password: str) -> None:
+        hashed_password = self.password_hasher.hash_password(password)
+        sql = "UPDATE users SET password = ? WHERE username = ?"
+        params = (hashed_password, username)
         self.db.execute(sql, params)
         self.db.commit()
 
@@ -41,20 +57,11 @@ class UserRepository:
         else:
             return None
 
-    def update_user_password(self, username: str, password: str) -> None:
-        hashed_password = self._hash_password(password)
-        sql = "UPDATE users SET password = ? WHERE username = ?"
-        params = (hashed_password, username)
-        self.db.execute(sql, params)
-        self.db.commit()
-
     def delete_user(self, username: str) -> None:
         sql = "DELETE FROM users WHERE username = ?"
         params = (username,)
         self.db.execute(sql, params)
         self.db.commit()
 
-    def _hash_password(self, password: str) -> str:
-        salt = b'salt' # replace with a random salt
-        hashed_password = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
-        return hashed_password.hex()
+
+
